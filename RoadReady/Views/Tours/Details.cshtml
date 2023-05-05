@@ -1,0 +1,194 @@
+﻿@model RoadReady.Models.Tour
+
+@{
+    ViewData["Title"] = "Tour";
+}
+
+<div>
+    <h4>Tour</h4>
+    <hr />
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.Name)
+        </dt>
+        <dd class = "col-sm-10" style="margin-bottom: 20px;">
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+     </dl>
+        @foreach (var item in Model.Stops)
+        {
+            <dl class="row">
+                <dt class="col-sm-2">
+                    @(String.Format("Stop {0}", item.Order + 1))
+                </dt>
+                <dd class="col-sm-10">
+                    @(String.Format("{0}", item.Name))
+                </dd>
+                @if(item.Order != Model.Stops.Count - 1)
+                {
+                    <dt class="col-sm-2">
+                        Distance to Next Stop
+                    </dt>
+                    <dd class="col-sm-10 distance">
+                    
+                    </dd>
+                    <dt class="col-sm-2">
+                        Duration to Next Stop
+                    </dt>
+                    <dd class="col-sm-10 duration">
+
+                    </dd>
+                }
+                else if(item.Order == Model.Stops.Count - 1)
+                {
+                    <dt class="col-sm-2">
+                        Distance Back
+                    </dt>
+                    <dd class="col-sm-10 distance">
+
+                    </dd>
+                    <dt class="col-sm-2">
+                        Duration Back
+                    </dt>
+                    <dd class="col-sm-10 duration">
+
+                    </dd>
+                }
+            </dl>
+        }
+    <dl class="row">
+        <dt class="col-sm-2">
+            Total Distance
+        </dt>
+        <dd class="col-sm-10" id="distance-total">
+
+        </dd>
+        <dt class="col-sm-2">
+            Total Duration
+        </dt>
+        <dd class="col-sm-10" id="duration-total">
+
+        </dd>
+    </dl>
+    <div id="map" style="height: 600px;width: 100%;"></div>
+</div>
+<div>
+    <a asp-action="Edit" asp-route-id="@Model?.Id">Edit</a> |
+    <a asp-action="Index">Back to List</a>
+</div>
+@section Scripts {
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDvME3AVi6GUSS2-u5RfYJfSe49vZIXmgk&libraries=places&v=weekly&callback=initMap"
+            defer></script>
+    <script defer>
+        function initMap() {
+            var directionsService = new google.maps.DirectionsService();
+            var directionsRenderer = new google.maps.DirectionsRenderer();
+            let stopsList = @Html.Raw(Json.Serialize(Model.Stops));
+            const position = { lat: stopsList[0].latitude, lng: stopsList[0].longitude };
+            let map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 12,
+                center: position,
+                mapId: "map",
+            });
+            directionsRenderer.setMap(map);
+            stops = [];
+            let firstStop;
+            let lastStop;
+            stopsList.forEach((stop, index) => {
+                if(index === 0) {
+                    firstStop = { lat: stop.latitude, lng: stop.longitude };
+                } else {
+                    stops.push(
+                        {
+                            location: { lat: stop.latitude, lng: stop.longitude },
+                            stopover: true
+                        }
+                    )
+                }
+            });
+            let request = {
+                origin: firstStop,
+                destination: firstStop,
+                travelMode: 'DRIVING',
+                waypoints: stops
+            };
+            directionsService.route(request, function (result, status) {
+                if (status == 'OK') {
+                    console.log(result);
+                    directionsRenderer.setDirections(result);
+                    let distances = [];
+                    let durations = [];
+
+                    let distanceTags = document.getElementsByClassName("distance");
+                    for (let i = 0; i < distanceTags.length; i++) {
+                        let distance = result.routes[0].legs[i].distance.text;
+                        distanceTags[i].innerHTML = distance;
+                        distances.push(distance);
+                    }
+
+                    let durationTags = document.getElementsByClassName("duration");
+                    for (let i = 0; i < durationTags.length; i++) {
+                        let duration = result.routes[0].legs[i].duration.text;
+                        durationTags[i].innerHTML = duration;
+                        durations.push(duration);
+                    }
+
+                    let distanceTag = document.getElementById("distance-total");
+                    distanceTag.innerHTML = addMiles(distances);
+
+                    let durationTag = document.getElementById("duration-total");
+                    durationTag.innerHTML = addTimespans(durations);
+                }
+            });
+        }
+
+        function addMiles(miles) {
+            let mileTotal = 0;
+            miles.forEach(mile => mileTotal += parseFloat(mile.slice(0, -3)))
+            return mileTotal.toString() + " mi"
+        }
+
+        function addTimespans(timespans) {
+            let totalHours = 0;
+            let totalMinutes = 0;
+
+            for (let i = 0; i < timespans.length; i++) {
+                const timespan = timespans[i];
+                const hoursMatch = timespan.match(/(\d+) hour/);
+                const minsMatch = timespan.match(/(\d+) min/);
+
+                if (hoursMatch) {
+                    totalHours += parseInt(hoursMatch[0]);
+                }
+                if (minsMatch) {
+                    totalMinutes += parseInt(minsMatch[0]);
+                }
+            }
+
+            totalHours += Math.floor(totalMinutes / 60);
+            totalMinutes = totalMinutes % 60;
+
+            let output = "";
+            if (totalHours > 0) {
+                output += totalHours + " hour";
+                if (totalHours > 1) {
+                    output += "s";
+                }
+            }
+            if (totalMinutes > 0) {
+                if (output.length > 0) {
+                    output += " ";
+                }
+                output += totalMinutes + " min";
+                if (totalMinutes > 1) {
+                    output += "s";
+                }
+            }
+            if (output.length === 0) {
+                output = "0 minutes";
+            }
+
+            return output;
+        }
+    </script>
+}
